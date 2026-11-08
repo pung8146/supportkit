@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소담공방 (가상 데모)</title>
+<style>
+  :root { --ink: #24211c; --muted: #71695d; --paper: #f6f2ea; --line: #ddd5c7; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; line-height: 1.7; }
+  .disclaimer { margin: 0; padding: 10px 24px; background: var(--ink); color: var(--paper); font-size: 14px; text-align: center; }
+  main { max-width: 880px; margin: 0 auto; padding: 72px 24px 120px; }
+  h1 { margin: 0 0 16px; font-size: clamp(40px, 8vw, 72px); line-height: 1.1; letter-spacing: -0.03em; }
+  .lede { margin: 0 0 72px; color: var(--muted); font-size: 18px; }
+  h2 { margin: 72px 0 8px; font-size: 22px; }
+  .products { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .products li { display: flex; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  dt { margin-top: 20px; font-weight: 700; }
+  dd { margin: 0; color: var(--muted); }
+  footer { padding: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+  <p class="disclaimer">SupportKit 포트폴리오용 가상 쇼핑몰이며 실제 주문·결제되지 않습니다.</p>
+  <main>
+    <h1>소담공방</h1>
+    <p class="lede">매일 쓰는 그릇을 천천히 만듭니다.</p>
+
+    <h2>상품</h2>
+    <ul class="products">
+      <li><span>백자 밥그릇</span><span>28,000원</span></li>
+      <li><span>분청 찻잔 세트</span><span>46,000원</span></li>
+      <li><span>옹기 화병</span><span>62,000원</span></li>
+    </ul>
+
+    <h2>이용 안내</h2>
+    <dl>
+      <dt>배송 안내</dt>
+      <dd>평일 오후 2시 이전 주문은 당일 출고되며, 보통 1~2일 안에 도착합니다.</dd>
+      <dt>교환·환불 안내</dt>
+      <dd>상품을 받은 날부터 7일 이내에 환불을 신청하실 수 있습니다. 사용하지 않은 상품만 가능합니다.</dd>
+    </dl>
+  </main>
+  <footer>SupportKit 포트폴리오용 가상 쇼핑몰이며 실제 주문·결제되지 않습니다.</footer>
+
+  <script src="http://localhost:3000/widget/loader.js" data-bot="pk_demo_shop" async></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "@supportkit/demo-shop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/serve-static.mjs . 5174"
+  }
+}

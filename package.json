@@ -1,0 +1,20 @@
+{
+  "name": "supportkit",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "build:widget": "corepack pnpm --filter @supportkit/widget build",
+    "build": "corepack pnpm build:widget && corepack pnpm --filter @supportkit/admin build",
+    "dev": "corepack pnpm build:widget && corepack pnpm --parallel --filter @supportkit/admin --filter @supportkit/demo-shop dev",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

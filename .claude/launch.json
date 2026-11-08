@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "--filter", "@supportkit/admin", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "demo-shop",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "--filter", "@supportkit/demo-shop", "dev"],
+      "port": 5174
+    }
+  ]
+}
