@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 
 const DEMO_SHOP = 'http://localhost:5174';
 const HOSTILE = 'http://localhost:5175';
@@ -103,6 +104,32 @@ test('Escape closes the panel and returns focus to the launcher', async ({ page 
   await page.keyboard.press('Escape');
   await expect(launcher(page)).toBeFocused();
   await expect(page.locator('[data-supportkit] iframe')).toBeHidden();
+});
+
+test('removing a domain blocks tokens that were already issued', async ({ request }) => {
+  process.loadEnvFile('apps/admin/.env.local');
+  const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const bootstrapUrl = 'http://localhost:3000/api/widget/bootstrap/pk_demo_shop';
+  const chatUrl = 'http://localhost:3000/api/widget/chat';
+  const headers = { origin: HOSTILE };
+
+  const { token } = await (await request.post(bootstrapUrl, { headers })).json();
+  const chat = () => request.post(chatUrl, { data: { message: '배송' }, headers: { authorization: `Bearer ${token}` } });
+  expect((await chat()).status()).toBe(200);
+
+  const { data } = await db.from('bots').select('allowed_origins').eq('public_key', 'pk_demo_shop').single();
+  const original: string[] = data!.allowed_origins;
+  try {
+    await db
+      .from('bots')
+      .update({ allowed_origins: original.filter((origin) => origin !== HOSTILE) })
+      .eq('public_key', 'pk_demo_shop');
+
+    expect((await chat()).status()).toBe(401);
+    expect((await request.post(bootstrapUrl, { headers })).status()).toBe(403);
+  } finally {
+    await db.from('bots').update({ allowed_origins: original }).eq('public_key', 'pk_demo_shop');
+  }
 });
 
 test('chat API rejects a missing or forged token', async ({ request }) => {

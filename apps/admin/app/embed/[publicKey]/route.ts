@@ -17,7 +17,11 @@ const html = `<!doctype html>
 
 export async function GET(_request: Request, context: { params: Promise<{ publicKey: string }> }) {
   const { publicKey } = await context.params;
-  const bot = findBotByPublicKey(publicKey);
+  const bot = await findBotByPublicKey(publicKey).catch((error: unknown) => {
+    console.error(error);
+    return undefined;
+  });
+  if (bot === undefined) return new Response('Service unavailable', { status: 503 });
   if (!bot) return new Response('Not found', { status: 404 });
 
   const policy = [

@@ -1,3 +1,4 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { WidgetConfig } from '@supportkit/widget/protocol';
 
 export type Bot = {
@@ -7,26 +8,51 @@ export type Bot = {
   config: WidgetConfig;
 };
 
-// shortcut: single in-code bot, replace with the bots table in phase 2.
-const demoBot = (): Bot => ({
-  id: 'bot_demo',
-  publicKey: 'pk_demo_shop',
-  allowedOrigins: (process.env.DEMO_ALLOWED_ORIGINS ?? 'http://localhost:5174').split(',').filter(Boolean),
-  config: {
-    botName: '소담공방 안내',
-    launcherLabel: '문의하기',
-    welcome: '안녕하세요. 배송, 교환, 환불에 대해 안내해 드릴게요.',
-    starters: ['환불은 며칠 안에 되나요?', '배송은 얼마나 걸리나요?'],
-    theme: { accent: '#1f4d3f', position: 'right' },
-  },
-});
-
-export const findBotByPublicKey = (publicKey: string) => {
-  const bot = demoBot();
-  return bot.publicKey === publicKey ? bot : null;
+type BotRow = {
+  id: string;
+  public_key: string;
+  name: string;
+  launcher_label: string;
+  welcome: string;
+  starters: string[];
+  theme: WidgetConfig['theme'];
+  allowed_origins: string[];
 };
 
-export const findBotById = (id: string) => {
-  const bot = demoBot();
-  return bot.id === id ? bot : null;
-};
+const COLUMNS = 'id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins';
+
+let client: SupabaseClient | undefined;
+
+// service_role bypasses RLS: callers must scope every query to a bot from a verified token or public key.
+function serviceClient(): SupabaseClient {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+  client ??= createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  return client;
+}
+
+function toBot(row: BotRow): Bot {
+  return {
+    id: row.id,
+    publicKey: row.public_key,
+    allowedOrigins: row.allowed_origins,
+    config: {
+      botName: row.name,
+      launcherLabel: row.launcher_label,
+      welcome: row.welcome,
+      starters: row.starters,
+      theme: row.theme,
+    },
+  };
+}
+
+async function findBot(column: 'id' | 'public_key', value: string): Promise<Bot | null> {
+  const { data, error } = await serviceClient().from('bots').select(COLUMNS).eq(column, value).maybeSingle<BotRow>();
+  // Throw so an outage is never reported to the caller as "bot not found".
+  if (error) throw new Error(`bot lookup failed: ${error.message}`);
+  return data ? toBot(data) : null;
+}
+
+export const findBotByPublicKey = (publicKey: string) => findBot('public_key', publicKey);
+export const findBotById = (id: string) => findBot('id', id);

@@ -22,9 +22,16 @@ async function* answerEvents(question: string): AsyncGenerator<ChatEvent> {
 export async function POST(request: Request) {
   const bearer = request.headers.get('authorization')?.replace(/^Bearer /, '');
   const token = bearer ? verifyToken(bearer, tokenSecret()) : null;
-  const bot = token && findBotById(token.botId);
+  if (!token) return Response.json({ error: 'unauthorized' }, { status: 401 });
+
+  const bot = await findBotById(token.botId).catch((error: unknown) => {
+    console.error(error);
+    return undefined;
+  });
+  if (bot === undefined) return Response.json({ error: 'service_unavailable' }, { status: 503 });
+
   // Rechecked per request so removing a domain takes effect before the token expires.
-  if (!token || !bot || !originAllowed(token.origin, bot.allowedOrigins)) {
+  if (!bot || !originAllowed(token.origin, bot.allowedOrigins)) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 

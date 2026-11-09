@@ -9,7 +9,11 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request, context: { params: Promise<{ publicKey: string }> }) {
   const { publicKey } = await context.params;
   const origin = request.headers.get('origin');
-  const bot = findBotByPublicKey(publicKey);
+  const bot = await findBotByPublicKey(publicKey).catch((error: unknown) => {
+    console.error(error);
+    return undefined;
+  });
+  if (bot === undefined) return Response.json({ error: 'service_unavailable' }, { status: 503 });
 
   // Unknown key and disallowed origin look identical to the caller.
   if (!bot || !origin || !originAllowed(origin, bot.allowedOrigins)) {

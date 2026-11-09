@@ -9,6 +9,7 @@ const staticHost = (dir: string, port: number) => ({
 
 export default defineConfig({
   testDir: 'e2e',
+  workers: 1, // tests share the local Supabase demo bot
   use: { browserName: 'chromium' },
   webServer: [
     {
@@ -16,10 +17,8 @@ export default defineConfig({
       url: 'http://localhost:3000',
       timeout: 240_000,
       reuseExistingServer: !process.env.CI,
-      env: {
-        WIDGET_TOKEN_SECRET: 'e2e-only-secret-e2e-only-secret-0000',
-        DEMO_ALLOWED_ORIGINS: 'http://localhost:5174,http://localhost:5175',
-      },
+      // Supabase settings come from apps/admin/.env.local; allowed origins from supabase/seed.sql.
+      env: { WIDGET_TOKEN_SECRET: 'e2e-only-secret-e2e-only-secret-0000' },
     },
     staticHost('apps/demo-shop', 5174),
     staticHost('e2e/hosts', 5175), // allowed
