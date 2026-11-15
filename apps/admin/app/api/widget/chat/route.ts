@@ -1,20 +1,19 @@
-import { randomUUID } from 'node:crypto';
 import { MAX_MESSAGE_LENGTH, type ChatEvent } from '@supportkit/widget/protocol';
+import { answerEvents } from '../../../../lib/answer/pipeline';
 import { findBotById } from '../../../../lib/widget/bots';
-import { fakeAnswer } from '../../../../lib/widget/fake-llm';
+import { fakeEvents } from '../../../../lib/widget/fake-llm';
 import { originAllowed } from '../../../../lib/widget/origin';
 import { tokenSecret, verifyToken } from '../../../../lib/widget/token';
 
 export const dynamic = 'force-dynamic';
 
-async function* answerEvents(question: string): AsyncGenerator<ChatEvent> {
-  yield { type: 'meta', messageId: randomUUID() };
+async function* withDone(events: AsyncGenerator<ChatEvent>, signal: AbortSignal): AsyncGenerator<ChatEvent> {
   try {
-    const { stream, sources } = fakeAnswer(question);
-    for await (const text of stream) yield { type: 'delta', text };
-    if (sources.length > 0) yield { type: 'sources', sources };
+    yield* events;
     yield { type: 'done' };
-  } catch {
+  } catch (error) {
+    if (signal.aborted) return;
+    console.error(error);
     yield { type: 'error', code: 'provider_failed', message: '답변을 생성하지 못했습니다.' };
   }
 }
@@ -41,7 +40,8 @@ export async function POST(request: Request) {
     return Response.json({ error: 'invalid_message' }, { status: 400 });
   }
 
-  const events = answerEvents(message);
+  const source = process.env.LLM_MODE === 'fake' ? fakeEvents(message) : answerEvents(bot, message, request.signal);
+  const events = withDone(source, request.signal);
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {

@@ -20,6 +20,8 @@ export type ChatEvent =
   | { type: 'meta'; messageId: string }
   | { type: 'delta'; text: string }
   | { type: 'sources'; sources: ChatSource[] }
+  /** Server rejected the streamed text (no grounding); show this instead. */
+  | { type: 'replace'; text: string }
   | { type: 'done' }
   | { type: 'error'; code: string; message: string };
 

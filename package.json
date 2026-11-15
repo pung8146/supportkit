@@ -10,6 +10,7 @@
     "typecheck": "corepack pnpm -r typecheck",
     "test": "vitest run",
     "test:db": "vitest run --config vitest.db.config.ts",
+    "test:eval": "vitest run --config vitest.eval.config.ts",
     "e2e": "playwright test"
   },
   "devDependencies": {

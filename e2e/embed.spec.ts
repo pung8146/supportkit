@@ -91,6 +91,15 @@ test('keeps the question and retries after a provider failure', async ({ page })
   await expect(retry).toBeEnabled();
 });
 
+test('replaces an ungrounded answer with the fallback and no sources', async ({ page }) => {
+  await openWidget(page, DEMO_SHOP);
+  const widget = await ask(page, '__replace__ 환불');
+  const reply = widget.locator('.reply').last();
+  await expect(reply).toHaveAttribute('data-status', 'done');
+  await expect(reply.locator('.answer')).toHaveText('등록된 안내에서 답을 찾지 못했어요. 문의를 남겨 주시면 담당자가 확인해 드릴게요.');
+  await expect(reply.locator('.sources')).toHaveCount(0);
+});
+
 test('stops a streaming answer', async ({ page }) => {
   await openWidget(page, DEMO_SHOP);
   const widget = await ask(page, '__slow__ 환불');

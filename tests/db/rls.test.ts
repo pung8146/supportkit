@@ -178,6 +178,80 @@ describe('anonymous access', () => {
   });
 });
 
+const vector = (hot: number) => JSON.stringify(Array.from({ length: 1536 }, (_, index) => (index === hot ? 1 : 0)));
+
+async function insertItem(botId: string, title: string) {
+  const { data, error } = await service
+    .from('knowledge_items')
+    .insert({ bot_id: botId, kind: 'faq', title, body: 'body' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+const replaceChunks = (itemId: string, version: number, contents: string[], vectors: string[]) =>
+  service.rpc('replace_item_chunks', { p_item_id: itemId, p_version: version, p_contents: contents, p_embeddings: vectors });
+
+const match = (botId: string, hot: number) =>
+  service.rpc('match_chunks', { p_bot_id: botId, p_embedding: vector(hot), p_count: 20 });
+
+describe('retrieval functions', () => {
+  it('cannot be called by signed-in or anonymous users', async () => {
+    for (const client of [a.client, anon]) {
+      expect((await client.rpc('match_chunks', { p_bot_id: a.botId, p_embedding: vector(0), p_count: 5 })).error).not.toBeNull();
+      const replaced = await client.rpc('replace_item_chunks', {
+        p_item_id: itemId,
+        p_version: 1,
+        p_contents: ['x'],
+        p_embeddings: [vector(0)],
+      });
+      expect(replaced.error).not.toBeNull();
+    }
+  });
+
+  it('owner cannot mark knowledge as indexed', async () => {
+    expect((await a.client.from('knowledge_items').update({ status: 'ready' }).eq('id', itemId)).error).not.toBeNull();
+  });
+
+  it('ranks by similarity and never returns another bot\'s chunks', async () => {
+    const ownItem = await insertItem(a.botId, '배송');
+    const otherItem = await insertItem(b.botId, '배송');
+    expect((await replaceChunks(ownItem, 1, ['near', 'far'], [vector(1), vector(2)])).data).toBe(true);
+    expect((await replaceChunks(otherItem, 1, ['other bot'], [vector(1)])).data).toBe(true);
+
+    const { data, error } = await match(a.botId, 1);
+    expect(error).toBeNull();
+    expect(data[0]).toMatchObject({ content: 'near', item_id: ownItem });
+    expect(data[0].similarity).toBeCloseTo(1);
+    expect(data.some((row: { item_id: string }) => row.item_id === otherItem)).toBe(false);
+
+    const { data: item } = await service.from('knowledge_items').select('status').eq('id', ownItem).single();
+    expect(item?.status).toBe('ready');
+  });
+
+  it('hides chunks of an edited item until the new version is embedded', async () => {
+    const id = await insertItem(a.botId, '환불');
+    await replaceChunks(id, 1, ['refund policy v1'], [vector(3)]);
+
+    await a.client.from('knowledge_items').update({ body: 'refund policy v2' }).eq('id', id);
+    const { data: edited } = await service.from('knowledge_items').select('version, status').eq('id', id).single();
+    expect(edited).toEqual({ version: 2, status: 'pending' });
+
+    const contents = async () => ((await match(a.botId, 3)).data as { content: string }[]).map((row) => row.content);
+    expect(await contents()).not.toContain('refund policy v1');
+
+    // An embedding of the old text that finishes late must not overwrite the edit.
+    expect((await replaceChunks(id, 1, ['refund policy v1'], [vector(3)])).data).toBe(false);
+    expect((await replaceChunks(id, 2, ['refund policy v2'], [vector(3)])).data).toBe(true);
+    expect(await contents()).toContain('refund policy v2');
+  });
+
+  it('rejects mismatched contents and embeddings', async () => {
+    expect((await replaceChunks(itemId, 1, ['a', 'b'], [vector(0)])).error).not.toBeNull();
+  });
+});
+
 describe('cross-bot integrity', () => {
   it('rejects a message that mixes two bots', async () => {
     const { error } = await service

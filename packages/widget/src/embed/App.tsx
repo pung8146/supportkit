@@ -52,6 +52,9 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
           if (event.type === 'delta') {
             text += event.text;
             frame ||= requestAnimationFrame(flush);
+          } else if (event.type === 'replace') {
+            text = event.text;
+            frame ||= requestAnimationFrame(flush);
           } else if (event.type === 'sources') {
             patch(id, { sources: event.sources });
           } else if (event.type === 'error') {

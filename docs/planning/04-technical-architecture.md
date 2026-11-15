@@ -82,7 +82,7 @@ inquiries(id, bot_id, conversation_id, question, contact,
 rate_buckets(key, window_start, count)
 ```
 
-`outcome`은 `answered | no_match | verify_failed | error`. `sources_snapshot`은 지식이 나중에 수정돼도 당시 근거를 보존한다. 재임베딩이 실패하면 이전 청크를 유지한다.
+`outcome`은 `answered | no_match | verify_failed | error`. `sources_snapshot`은 지식이 나중에 수정돼도 당시 근거를 보존한다. 지식을 수정하면 버전이 올라가고, 새 버전이 임베딩되기 전까지 이전 청크는 검색에서 제외한다. 수정 전 정책으로 답하는 것보다 답하지 않는 편이 안전하기 때문이다.
 
 관리자 경로는 RLS를 사용한다. 공개 경로는 service role을 쓰되 `bot_id`는 항상 검증된 토큰에서만 가져오고 단일 헬퍼로 강제한다.
 

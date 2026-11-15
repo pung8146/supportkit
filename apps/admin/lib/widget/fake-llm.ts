@@ -1,4 +1,5 @@
-import type { ChatSource } from '@supportkit/widget/protocol';
+import { randomUUID } from 'node:crypto';
+import type { ChatEvent, ChatSource } from '@supportkit/widget/protocol';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -17,19 +18,25 @@ const answers: { match: RegExp; text: string; sources: ChatSource[] }[] = [
 
 const notFound = '등록된 안내에서 답을 찾지 못했어요. 문의를 남겨 주시면 담당자가 확인해 드릴게요.';
 
-// shortcut: canned streaming answers, replace with retrieval and the real LLM in phase 2.
-export function fakeAnswer(question: string) {
+/**
+ * Deterministic answers for E2E (LLM_MODE=fake): no cost, no network.
+ * `__slow__` slows the stream, `__fail__` fails it mid-way, `__replace__` exercises answer replacement.
+ */
+export async function* fakeEvents(question: string): AsyncGenerator<ChatEvent> {
+  yield { type: 'meta', messageId: randomUUID() };
   const found = answers.find((candidate) => candidate.match.test(question));
   const delay = question.includes('__slow__') ? 200 : 25;
+  const pieces = (found?.text ?? notFound).match(/.{1,4}/gs) ?? [];
 
-  async function* stream() {
-    const pieces = (found?.text ?? notFound).match(/.{1,4}/gs) ?? [];
-    for (const [index, piece] of pieces.entries()) {
-      if (question.includes('__fail__') && index === 3) throw new Error('fake provider failure');
-      await wait(delay);
-      yield piece;
-    }
+  for (const [index, piece] of pieces.entries()) {
+    if (question.includes('__fail__') && index === 3) throw new Error('fake provider failure');
+    await wait(delay);
+    yield { type: 'delta', text: piece };
   }
 
-  return { stream: stream(), sources: found?.sources ?? [] };
+  if (question.includes('__replace__')) {
+    yield { type: 'replace', text: notFound };
+    return;
+  }
+  if (found) yield { type: 'sources', sources: found.sources };
 }

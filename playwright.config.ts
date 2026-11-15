@@ -18,7 +18,7 @@ export default defineConfig({
       timeout: 240_000,
       reuseExistingServer: !process.env.CI,
       // Supabase settings come from apps/admin/.env.local; allowed origins from supabase/seed.sql.
-      env: { WIDGET_TOKEN_SECRET: 'e2e-only-secret-e2e-only-secret-0000' },
+      env: { WIDGET_TOKEN_SECRET: 'e2e-only-secret-e2e-only-secret-0000', LLM_MODE: 'fake' },
     },
     staticHost('apps/demo-shop', 5174),
     staticHost('e2e/hosts', 5175), // allowed

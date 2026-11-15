@@ -1,10 +1,11 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { WidgetConfig } from '@supportkit/widget/protocol';
+import { serviceClient } from '../db';
 
 export type Bot = {
   id: string;
   publicKey: string;
   allowedOrigins: string[];
+  fallback: string;
   config: WidgetConfig;
 };
 
@@ -17,26 +18,17 @@ type BotRow = {
   starters: string[];
   theme: WidgetConfig['theme'];
   allowed_origins: string[];
+  fallback: string;
 };
 
-const COLUMNS = 'id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins';
-
-let client: SupabaseClient | undefined;
-
-// service_role bypasses RLS: callers must scope every query to a bot from a verified token or public key.
-function serviceClient(): SupabaseClient {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-  client ??= createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  return client;
-}
+const COLUMNS = 'id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback';
 
 function toBot(row: BotRow): Bot {
   return {
     id: row.id,
     publicKey: row.public_key,
     allowedOrigins: row.allowed_origins,
+    fallback: row.fallback,
     config: {
       botName: row.name,
       launcherLabel: row.launcher_label,
