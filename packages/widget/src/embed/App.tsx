@@ -172,7 +172,7 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
           rows={1}
           value={draft}
           maxLength={MAX_MESSAGE_LENGTH}
-          placeholder="궁금한 내용을 입력하세요"
+          placeholder="무엇이든 물어보세요"
           aria-label="질문 입력"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
