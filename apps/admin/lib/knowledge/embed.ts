@@ -1,6 +1,17 @@
 const MODEL = 'text-embedding-3-small';
+const DIMENSIONS = 1536;
+
+// shortcut: deterministic vectors for E2E (LLM_MODE=fake); they carry no meaning, so retrieval
+// quality is only measured by the billed evals.
+function fakeEmbedding(text: string): number[] {
+  const vector = new Array<number>(DIMENSIONS).fill(0);
+  for (let i = 0; i < text.length; i++) vector[(text.charCodeAt(i) * 31 + i) % DIMENSIONS]! += 1;
+  return vector;
+}
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
+  if (process.env.LLM_MODE === 'fake') return texts.map(fakeEmbedding);
+
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY is required');
 

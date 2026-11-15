@@ -12,6 +12,8 @@ export type BootstrapResponse = {
   token: string;
   origin: string;
   config: WidgetConfig;
+  /** Admin preview: the parent may push unsaved settings with sk:config. */
+  preview?: boolean;
 };
 
 export type ChatSource = { title: string };
@@ -47,4 +49,6 @@ export type FrameMessage =
 export type LoaderMessage =
   | { type: 'sk:init'; session: BootstrapResponse }
   | { type: 'sk:init-failed' }
-  | { type: 'sk:open' };
+  | { type: 'sk:open' }
+  /** Accepted only in preview sessions. */
+  | { type: 'sk:config'; config: WidgetConfig };

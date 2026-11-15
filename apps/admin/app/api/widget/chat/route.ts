@@ -62,7 +62,8 @@ export async function POST(request: Request) {
   let conversation: { id: string; ref: string };
   let history: ReturnType<typeof historyForModel>;
   try {
-    conversation = await openConversation(bot, token.origin, ref);
+    // Preview chats are stored apart so the inbox can tell them from real visitors.
+    conversation = await openConversation(bot, token.preview ? 'preview' : token.origin, ref);
     history = historyForModel(await loadHistory(conversation.id, HISTORY_TURNS));
     await appendMessage({ conversationId: conversation.id, botId: bot.id, role: 'user', content: maskPII(message) });
   } catch (error) {

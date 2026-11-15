@@ -15,7 +15,7 @@ export async function authorizeWidget(request: Request): Promise<{ token: Widget
   if (bot === undefined) return Response.json({ error: 'service_unavailable' }, { status: 503 });
 
   // Rechecked per request so removing a domain takes effect before the token expires.
-  if (!bot || !originAllowed(token.origin, bot.allowedOrigins)) {
+  if (!bot || (!token.preview && !originAllowed(token.origin, bot.allowedOrigins))) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
   return { token, bot };

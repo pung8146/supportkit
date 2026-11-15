@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
-import type { BootstrapResponse, FrameMessage, LoaderMessage } from '../protocol';
+import { readableAccent } from '../color';
+import type { BootstrapResponse, FrameMessage, LoaderMessage, WidgetConfig } from '../protocol';
 import { App, fromHistory } from './App';
 import { clearConversation, loadConversation } from './storage';
 import { restoreConversation, type TokenSource } from './stream';
@@ -22,28 +23,34 @@ const auth: TokenSource = {
 };
 
 const root = createRoot(document.getElementById('root')!);
+let render: ((config: WidgetConfig) => void) | undefined;
 
 async function start(current: BootstrapResponse) {
-  document.documentElement.style.setProperty('--accent', current.config.theme.accent);
-
   const saved = loadConversation();
   // A failed restore starts a fresh conversation rather than blocking the widget.
   const history = saved ? await restoreConversation(saved, auth).catch(() => undefined) : undefined;
   if (saved && history === null) clearConversation();
+  const initialMessages = history ? fromHistory(history) : [];
+  const initialConversation = history ? saved : undefined;
 
-  root.render(
-    <App
-      config={current.config}
-      auth={auth}
-      initialMessages={history ? fromHistory(history) : []}
-      initialConversation={history ? saved : undefined}
-      onClose={() => postToLoader({ type: 'sk:close' })}
-      subscribeOpen={(listener) => {
-        openListeners.add(listener);
-        return () => openListeners.delete(listener);
-      }}
-    />,
-  );
+  // Re-rendering the same App keeps the conversation while settings change in the admin preview.
+  render = (config) => {
+    document.documentElement.style.setProperty('--accent', readableAccent(config.theme.accent));
+    root.render(
+      <App
+        config={config}
+        auth={auth}
+        initialMessages={initialMessages}
+        initialConversation={initialConversation}
+        onClose={() => postToLoader({ type: 'sk:close' })}
+        subscribeOpen={(listener) => {
+          openListeners.add(listener);
+          return () => openListeners.delete(listener);
+        }}
+      />,
+    );
+  };
+  render(current.config);
 }
 
 window.addEventListener('message', (event: MessageEvent<LoaderMessage>) => {
@@ -65,6 +72,10 @@ window.addEventListener('message', (event: MessageEvent<LoaderMessage>) => {
       break;
     case 'sk:open':
       openListeners.forEach((listener) => listener());
+      break;
+    case 'sk:config':
+      // A host site must not restyle or reword the widget; only the owner's admin preview may.
+      if (session?.preview) render?.(event.data.config);
       break;
   }
 });

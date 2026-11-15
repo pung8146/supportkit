@@ -1,3 +1,4 @@
+import { readableAccent } from './color';
 import type { BootstrapResponse, FrameMessage, LoaderMessage } from './protocol';
 
 const css = `
@@ -60,7 +61,7 @@ async function start() {
   launcher.type = 'button';
   launcher.className = `launcher ${side}`;
   launcher.textContent = session.config.launcherLabel;
-  launcher.style.setProperty('--sk-accent', session.config.theme.accent);
+  launcher.style.setProperty('--sk-accent', readableAccent(session.config.theme.accent));
   root.append(launcher);
   document.body.append(host);
 

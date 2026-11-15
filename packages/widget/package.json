@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     "./protocol": "./src/protocol.ts",
-    "./inquiry": "./src/inquiry.ts"
+    "./inquiry": "./src/inquiry.ts",
+    "./color": "./src/color.ts"
   },
   "scripts": {
     "build": "vite build --config vite.loader.config.ts && vite build --config vite.embed.config.ts",

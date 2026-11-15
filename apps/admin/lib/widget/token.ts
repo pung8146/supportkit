@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export type WidgetToken = { botId: string; origin: string; sid: string; exp: number };
+/** preview: issued to the bot owner for the admin preview, exempt from the origin allowlist. */
+export type WidgetToken = { botId: string; origin: string; sid: string; exp: number; preview?: true };
 
 const TTL_SECONDS = 15 * 60;
 

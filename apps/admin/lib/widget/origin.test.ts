@@ -36,11 +36,11 @@ describe('originAllowed', () => {
 });
 
 describe('frameAncestors', () => {
-  it('joins origins', () => {
-    expect(frameAncestors(['https://a.test', 'https://b.test'])).toBe('https://a.test https://b.test');
+  it('allows the admin preview and the listed origins', () => {
+    expect(frameAncestors(['https://a.test', 'https://b.test'])).toBe("'self' https://a.test https://b.test");
   });
 
-  it('denies all framing for an empty list', () => {
-    expect(frameAncestors([])).toBe("'none'");
+  it('allows only the admin preview for an empty list', () => {
+    expect(frameAncestors([])).toBe("'self'");
   });
 });

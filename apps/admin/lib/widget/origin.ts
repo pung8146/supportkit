@@ -17,6 +17,7 @@ export function originAllowed(origin: string | null, allowed: string[]): boolean
   });
 }
 
+/** 'self' lets the admin preview frame the widget; it shares this origin. */
 export function frameAncestors(allowed: string[]): string {
-  return allowed.length > 0 ? allowed.join(' ') : "'none'";
+  return ["'self'", ...allowed].join(' ');
 }
