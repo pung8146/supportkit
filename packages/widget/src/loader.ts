@@ -82,11 +82,42 @@ async function start() {
     return frame;
   };
 
+  // Full-screen panel on phones: lock the page behind it and follow the on-screen keyboard.
+  const phone = window.matchMedia('(max-width: 480px)');
+  const root$ = document.documentElement;
+  let savedOverflow: string | null = null;
+
+  const fitToViewport = () => {
+    const viewport = window.visualViewport;
+    if (!frame) return;
+    if (open && phone.matches && viewport) {
+      frame.style.height = `${viewport.height}px`;
+      frame.style.top = `${viewport.offsetTop}px`;
+    } else {
+      frame.style.removeProperty('height');
+      frame.style.removeProperty('top');
+    }
+  };
+  window.visualViewport?.addEventListener('resize', fitToViewport);
+  window.visualViewport?.addEventListener('scroll', fitToViewport);
+
+  const lockPage = (lock: boolean) => {
+    if (lock && phone.matches && savedOverflow === null) {
+      savedOverflow = root$.style.overflow;
+      root$.style.overflow = 'hidden';
+    } else if (!lock && savedOverflow !== null) {
+      root$.style.overflow = savedOverflow;
+      savedOverflow = null;
+    }
+  };
+
   const show = () => {
     const panel = ensureFrame();
     open = true;
     panel.hidden = false;
     launcher.hidden = true;
+    lockPage(true);
+    fitToViewport();
     panel.focus();
     if (ready) send({ type: 'sk:open' });
   };
@@ -95,6 +126,8 @@ async function start() {
     open = false;
     if (frame) frame.hidden = true;
     launcher.hidden = false;
+    lockPage(false);
+    fitToViewport();
     launcher.focus();
   };
 

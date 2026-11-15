@@ -1,5 +1,11 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+
+function database() {
+  process.loadEnvFile('apps/admin/.env.local');
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
 
 const DEMO_SHOP = 'http://localhost:5174';
 const HOSTILE = 'http://localhost:5175';
@@ -27,7 +33,7 @@ async function ask(page: Page, text: string) {
 test('answers with a source on a separate-origin plain HTML site', async ({ page }) => {
   const widget = await openWidget(page, DEMO_SHOP);
   await widget.getByRole('button', { name: '환불은 며칠 안에 되나요?' }).click();
-  await expect(widget.getByText('7일 이내')).toBeVisible();
+  await expect(widget.locator('.reply .answer').last()).toContainText('7일 이내');
   await expect(widget.getByText('근거 · 교환·환불 안내')).toBeVisible();
 });
 
@@ -39,7 +45,7 @@ test('stays usable on a page with hostile global CSS', async ({ page }) => {
 
   await launcher(page).click();
   const widget = await ask(page, '배송 기간이 궁금해요');
-  await expect(widget.getByText('1~2일')).toBeVisible();
+  await expect(widget.locator('.reply .answer').last()).toContainText('1~2일');
 });
 
 test('does not render on a disallowed origin', async ({ page }) => {
@@ -116,8 +122,7 @@ test('Escape closes the panel and returns focus to the launcher', async ({ page 
 });
 
 test('removing a domain blocks tokens that were already issued', async ({ request }) => {
-  process.loadEnvFile('apps/admin/.env.local');
-  const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const db = database();
   const bootstrapUrl = 'http://localhost:3000/api/widget/bootstrap/pk_demo_shop';
   const chatUrl = 'http://localhost:3000/api/widget/chat';
   const headers = { origin: HOSTILE };
@@ -146,4 +151,91 @@ test('chat API rejects a missing or forged token', async ({ request }) => {
   expect((await request.post(url, { data: { message: 'hi' } })).status()).toBe(401);
   const forged = await request.post(url, { data: { message: 'hi' }, headers: { authorization: 'Bearer abc.def' } });
   expect(forged.status()).toBe(401);
+});
+
+test('restores the conversation after a reload and starts over on request', async ({ page }) => {
+  const widget = await openWidget(page, DEMO_SHOP);
+  await widget.getByRole('button', { name: '환불은 며칠 안에 되나요?' }).click();
+  await expect(widget.getByText('근거 · 교환·환불 안내')).toBeVisible();
+
+  await page.reload();
+  await launcher(page).click();
+  await expect(widget.locator('.question')).toHaveText('환불은 며칠 안에 되나요?');
+  await expect(widget.locator('.reply .answer').last()).toContainText('7일 이내');
+  await expect(widget.getByText('근거 · 교환·환불 안내')).toBeVisible();
+
+  await widget.getByRole('button', { name: '새 대화' }).click();
+  await expect(widget.locator('.question')).toHaveCount(0);
+
+  await page.reload();
+  await launcher(page).click();
+  await expect(widget.getByRole('button', { name: '환불은 며칠 안에 되나요?' })).toBeVisible();
+  await expect(widget.locator('.question')).toHaveCount(0);
+});
+
+test('takes an inquiry only with consent and stores it without PII in the question', async ({ page }) => {
+  await openWidget(page, DEMO_SHOP);
+  const widget = await ask(page, '선물 포장 되나요? 제 번호는 010-1111-2222');
+  await widget.getByRole('button', { name: '담당자에게 문의 남기기' }).click();
+
+  const form = widget.getByRole('form', { name: '담당자에게 문의 남기기' });
+  const contactField = form.getByLabel('연락받을 이메일 또는 전화번호');
+  await expect(contactField).toBeFocused();
+
+  await form.getByRole('button', { name: '문의 접수' }).click();
+  await expect(form.getByText('연락받을 이메일이나 전화번호를 입력해 주세요.')).toBeVisible();
+  await expect(form.getByText('개인정보 수집에 동의해야 접수할 수 있어요.')).toBeVisible();
+  await expect(contactField).toHaveAttribute('aria-invalid', 'true');
+  await expect(contactField).toBeFocused();
+
+  const contact = `e2e-${Date.now()}@example.com`;
+  await contactField.fill(contact);
+  await form.getByRole('checkbox').check();
+  await form.getByRole('button', { name: '문의 접수' }).click();
+  await expect(widget.getByText('문의가 접수되었어요. 담당자가 확인 후 연락드릴게요.')).toBeVisible();
+
+  const { data } = await database()
+    .from('inquiries')
+    .select('question, consent_version, conversation_id')
+    .eq('contact', contact)
+    .single();
+  expect(data?.consent_version).toBe('v1');
+  expect(data?.conversation_id).not.toBeNull();
+  expect(data?.question).toContain('[전화번호]');
+  expect(data?.question).not.toContain('010-1111-2222');
+});
+
+test('inquiry API rejects a submission without consent', async ({ request }) => {
+  const bootstrap = await request.post('http://localhost:3000/api/widget/bootstrap/pk_demo_shop', { headers: { origin: DEMO_SHOP } });
+  const { token } = await bootstrap.json();
+  const response = await request.post('http://localhost:3000/api/widget/inquiries', {
+    headers: { authorization: `Bearer ${token}` },
+    data: { question: '포장 되나요?', contact: 'a@b.co', consent: false },
+  });
+  expect(response.status()).toBe(400);
+});
+
+test('has no accessibility violations with the widget and inquiry form open', async ({ page }) => {
+  await openWidget(page, DEMO_SHOP);
+  const widget = await ask(page, '선물 포장 되나요?');
+  await widget.getByRole('button', { name: '담당자에게 문의 남기기' }).click();
+  await expect(widget.getByRole('form')).toBeVisible();
+
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(' > ')).join(', ')}`)).toEqual([]);
+});
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('opens full screen, locks the page behind it, and restores it on close', async ({ page }) => {
+    await openWidget(page, DEMO_SHOP);
+    const box = await page.locator('[data-supportkit] iframe').boundingBox();
+    expect(box).toEqual({ x: 0, y: 0, width: 375, height: 812 });
+    expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('hidden');
+
+    await page.keyboard.press('Escape');
+    await expect(launcher(page)).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('');
+  });
 });

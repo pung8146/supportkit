@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { ChatEvent } from '@supportkit/widget/protocol';
+import type { ChatEvent, ChatOutcome } from '@supportkit/widget/protocol';
 import { createCitationFilter } from './citations';
 import type { RetrievedChunk } from './retrieve';
 import { verifyFigures } from './verify-figures';
@@ -22,7 +22,7 @@ function prompt(question: string, chunks: RetrievedChunk[]) {
   return `<knowledge>\n${knowledge}\n</knowledge>\n\n<question>${question}</question>`;
 }
 
-export type AnswerOutcome = 'answered' | 'no_match' | 'verify_failed' | 'refused';
+export type AnswerOutcome = ChatOutcome;
 
 /** Streams an answer and replaces it with the fallback when it cites nothing for its figures. */
 export async function* generateAnswer(options: {
@@ -30,10 +30,12 @@ export async function* generateAnswer(options: {
   fallback: string;
   question: string;
   chunks: RetrievedChunk[];
+  /** Earlier turns, oldest first; knowledge is attached to the current question only. */
+  history?: Anthropic.MessageParam[];
   signal?: AbortSignal;
   onDone?: (outcome: AnswerOutcome, usage: Anthropic.Usage) => void;
-}): AsyncGenerator<ChatEvent> {
-  const { botName, fallback, question, chunks, signal } = options;
+}): AsyncGenerator<ChatEvent, AnswerOutcome> {
+  const { botName, fallback, question, chunks, history = [], signal } = options;
   const filter = createCitationFilter();
   let text = '';
 
@@ -43,7 +45,7 @@ export async function* generateAnswer(options: {
       max_tokens: 1024, // cost cap: answers are 2-4 sentences
       thinking: { type: 'disabled' }, // short grounded answers; thinking tokens bill as output
       system: system(botName),
-      messages: [{ role: 'user', content: prompt(question, chunks) }],
+      messages: [...history, { role: 'user', content: prompt(question, chunks) }],
     },
     { signal },
   );
@@ -71,8 +73,9 @@ export async function* generateAnswer(options: {
 
   if (outcome !== 'answered') {
     yield { type: 'replace', text: fallback };
-    return;
+    return outcome;
   }
   const titles = [...new Set(cited.map((chunk) => chunk.title))];
   if (titles.length > 0) yield { type: 'sources', sources: titles.map((title) => ({ title })) };
+  return outcome;
 }

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MAX_MESSAGE_LENGTH, type ChatSource, type WidgetConfig } from '../protocol';
-import { openChat, type TokenSource } from './stream';
+import type { InquiryInput } from '../inquiry';
+import { MAX_MESSAGE_LENGTH, type ChatOutcome, type ChatSource, type HistoryMessage, type WidgetConfig } from '../protocol';
+import { InquiryForm } from './InquiryForm';
+import { clearConversation, saveConversation } from './storage';
+import { openChat, submitInquiry, type TokenSource } from './stream';
 
 type Message = {
   id: string;
@@ -9,21 +12,46 @@ type Message = {
   status: 'waiting' | 'streaming' | 'done' | 'stopped' | 'error';
   question?: string;
   sources?: ChatSource[];
+  outcome?: ChatOutcome;
+  inquiry?: 'open' | 'sent';
 };
+
+export function fromHistory(history: HistoryMessage[]): Message[] {
+  let question = '';
+  return history.map((message) => {
+    if (message.role === 'user') {
+      question = message.text;
+      return { id: crypto.randomUUID(), role: 'user', text: message.text, status: 'done' };
+    }
+    const { outcome } = message;
+    return {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      text: message.text,
+      status: outcome === 'error' ? 'error' : 'done',
+      question,
+      sources: message.sources,
+      outcome: outcome === 'error' || outcome === null ? undefined : outcome,
+    };
+  });
+}
 
 type Props = {
   config: WidgetConfig;
   auth: TokenSource;
+  initialMessages: Message[];
+  initialConversation?: string;
   onClose: () => void;
   subscribeOpen: (listener: () => void) => () => void;
 };
 
-export function App({ config, auth, onClose, subscribeOpen }: Props) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function App({ config, auth, initialMessages, initialConversation, onClose, subscribeOpen }: Props) {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [draft, setDraft] = useState('');
   const [announcement, setAnnouncement] = useState('');
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const conversationRef = useRef(initialConversation);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +64,7 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
       const controller = new AbortController();
       abortRef.current = controller;
       setBusy(true);
-      patch(id, { text: '', status: 'waiting', sources: undefined });
+      patch(id, { text: '', status: 'waiting', sources: undefined, outcome: undefined, inquiry: undefined });
 
       let text = '';
       let frame = 0;
@@ -47,9 +75,12 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
       };
 
       try {
-        const events = await openChat(question, auth, controller.signal);
+        const events = await openChat(question, conversationRef.current, auth, controller.signal);
         for await (const event of events) {
-          if (event.type === 'delta') {
+          if (event.type === 'meta') {
+            conversationRef.current = event.conversation;
+            saveConversation(event.conversation);
+          } else if (event.type === 'delta') {
             text += event.text;
             frame ||= requestAnimationFrame(flush);
           } else if (event.type === 'replace') {
@@ -57,6 +88,8 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
             frame ||= requestAnimationFrame(flush);
           } else if (event.type === 'sources') {
             patch(id, { sources: event.sources });
+          } else if (event.type === 'done') {
+            patch(id, { outcome: event.outcome });
           } else if (event.type === 'error') {
             throw new Error(event.code);
           }
@@ -89,6 +122,22 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
     void answer(assistantId, question);
   };
 
+  const startOver = () => {
+    abortRef.current?.abort();
+    conversationRef.current = undefined;
+    clearConversation();
+    setMessages([]);
+    setAnnouncement('새 대화를 시작했습니다.');
+    inputRef.current?.focus();
+  };
+
+  const sendInquiry = async (id: string, input: InquiryInput) => {
+    await submitInquiry({ ...input, conversation: conversationRef.current }, auth);
+    patch(id, { inquiry: 'sent' });
+    setAnnouncement('문의가 접수되었습니다.');
+    inputRef.current?.focus();
+  };
+
   useEffect(() => {
     const focusInput = () => inputRef.current?.focus();
     focusInput();
@@ -109,12 +158,19 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
   }, [messages]);
 
   return (
-    <main className="panel">
+    <section className="panel" aria-labelledby="panel-title">
       <header className="header">
-        <h1>{config.botName}</h1>
-        <button type="button" className="close" onClick={onClose} aria-label="상담창 닫기">
-          닫기
-        </button>
+        <h1 id="panel-title">{config.botName}</h1>
+        <div className="header-actions">
+          {messages.length > 0 && (
+            <button type="button" className="close" onClick={startOver}>
+              새 대화
+            </button>
+          )}
+          <button type="button" className="close" onClick={onClose} aria-label="상담창 닫기">
+            닫기
+          </button>
+        </div>
       </header>
 
       <div className="log" ref={logRef}>
@@ -150,6 +206,23 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
               )}
               {message.status === 'done' && message.sources && message.sources.length > 0 && (
                 <p className="sources">근거 · {message.sources.map((source) => source.title).join(', ')}</p>
+              )}
+              {message.status === 'done' && message.outcome && message.outcome !== 'answered' && (
+                <>
+                  {message.inquiry === 'sent' && <p className="status">문의가 접수되었어요. 담당자가 확인 후 연락드릴게요.</p>}
+                  {message.inquiry === 'open' && (
+                    <InquiryForm
+                      question={message.question ?? ''}
+                      onSubmit={(input) => sendInquiry(message.id, input)}
+                      onCancel={() => patch(message.id, { inquiry: undefined })}
+                    />
+                  )}
+                  {!message.inquiry && (
+                    <button type="button" className="secondary" onClick={() => patch(message.id, { inquiry: 'open' })}>
+                      담당자에게 문의 남기기
+                    </button>
+                  )}
+                </>
               )}
             </div>
           ),
@@ -194,6 +267,6 @@ export function App({ config, auth, onClose, subscribeOpen }: Props) {
         )}
       </form>
       <p className="note">AI가 등록된 안내를 바탕으로 답변합니다. 개인정보는 입력하지 마세요.</p>
-    </main>
+    </section>
   );
 }

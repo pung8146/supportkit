@@ -6,6 +6,7 @@ export type Bot = {
   publicKey: string;
   allowedOrigins: string[];
   fallback: string;
+  retentionDays: number;
   config: WidgetConfig;
 };
 
@@ -19,9 +20,10 @@ type BotRow = {
   theme: WidgetConfig['theme'];
   allowed_origins: string[];
   fallback: string;
+  retention_days: number;
 };
 
-const COLUMNS = 'id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback';
+const COLUMNS = 'id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback, retention_days';
 
 function toBot(row: BotRow): Bot {
   return {
@@ -29,6 +31,7 @@ function toBot(row: BotRow): Bot {
     publicKey: row.public_key,
     allowedOrigins: row.allowed_origins,
     fallback: row.fallback,
+    retentionDays: row.retention_days,
     config: {
       botName: row.name,
       launcherLabel: row.launcher_label,

@@ -1,7 +1,8 @@
 import { createRoot } from 'react-dom/client';
 import type { BootstrapResponse, FrameMessage, LoaderMessage } from '../protocol';
-import { App } from './App';
-import type { TokenSource } from './stream';
+import { App, fromHistory } from './App';
+import { clearConversation, loadConversation } from './storage';
+import { restoreConversation, type TokenSource } from './stream';
 import './styles.css';
 
 let session: BootstrapResponse | undefined;
@@ -22,6 +23,29 @@ const auth: TokenSource = {
 
 const root = createRoot(document.getElementById('root')!);
 
+async function start(current: BootstrapResponse) {
+  document.documentElement.style.setProperty('--accent', current.config.theme.accent);
+
+  const saved = loadConversation();
+  // A failed restore starts a fresh conversation rather than blocking the widget.
+  const history = saved ? await restoreConversation(saved, auth).catch(() => undefined) : undefined;
+  if (saved && history === null) clearConversation();
+
+  root.render(
+    <App
+      config={current.config}
+      auth={auth}
+      initialMessages={history ? fromHistory(history) : []}
+      initialConversation={history ? saved : undefined}
+      onClose={() => postToLoader({ type: 'sk:close' })}
+      subscribeOpen={(listener) => {
+        openListeners.add(listener);
+        return () => openListeners.delete(listener);
+      }}
+    />,
+  );
+}
+
 window.addEventListener('message', (event: MessageEvent<LoaderMessage>) => {
   if (event.source !== window.parent) return;
   if (session && event.origin !== session.origin) return;
@@ -32,20 +56,7 @@ window.addEventListener('message', (event: MessageEvent<LoaderMessage>) => {
       session = event.data.session;
       pendingRefresh?.resolve();
       pendingRefresh = undefined;
-      if (firstInit) {
-        document.documentElement.style.setProperty('--accent', session.config.theme.accent);
-        root.render(
-          <App
-            config={session.config}
-            auth={auth}
-            onClose={() => postToLoader({ type: 'sk:close' })}
-            subscribeOpen={(listener) => {
-              openListeners.add(listener);
-              return () => openListeners.delete(listener);
-            }}
-          />,
-        );
-      }
+      if (firstInit) void start(session);
       break;
     }
     case 'sk:init-failed':

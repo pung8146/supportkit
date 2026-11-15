@@ -4,6 +4,7 @@
   --muted: #6b675f;
   --paper: #fbfaf7;
   --line: #e6e2da;
+  --error: #b3261e;
   font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   color: var(--ink);
   background: var(--paper);
@@ -62,7 +63,38 @@ html, body, #root { height: 100%; margin: 0; }
 }
 .composer button:disabled { opacity: 0.4; cursor: default; }
 
-.note { margin: 0; padding: 0 20px 12px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.note {
+  margin: 0; padding: 0 20px max(12px, env(safe-area-inset-bottom));
+  color: var(--muted); font-size: 12px; line-height: 1.4;
+}
+
+.header-actions { display: flex; gap: 14px; }
+
+.secondary {
+  align-self: flex-start; margin-top: 4px; padding: 8px 13px;
+  border: 1px solid var(--ink); border-radius: 999px;
+  background: none; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer;
+}
+
+.inquiry {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 6px;
+  padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+}
+.inquiry label { font-size: 13px; font-weight: 600; }
+.inquiry textarea, .inquiry input:not([type]) {
+  width: 100%; margin-bottom: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+  color: var(--ink); font: inherit; font-size: 16px; line-height: 1.4; resize: vertical;
+}
+.inquiry [aria-invalid="true"] { border-color: var(--error); }
+.inquiry .consent { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; line-height: 1.45; }
+.inquiry .consent input { width: 18px; height: 18px; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.field-error { margin: -2px 0 6px; color: var(--error); font-size: 13px; }
+.inquiry-actions { display: flex; align-items: center; gap: 16px; margin-top: 4px; }
+.inquiry-actions button[type="submit"] {
+  height: 40px; padding: 0 16px; border: 0; border-radius: 10px;
+  background: var(--accent); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.inquiry-actions button:disabled { opacity: 0.5; cursor: default; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 

@@ -16,14 +16,26 @@ export type BootstrapResponse = {
 
 export type ChatSource = { title: string };
 
+export type ChatOutcome = 'answered' | 'no_match' | 'verify_failed' | 'refused';
+
+/** `${conversationId}.${secret}`: the visitor's proof that a conversation is theirs. */
+export type ConversationRef = string;
+
 export type ChatEvent =
-  | { type: 'meta'; messageId: string }
+  | { type: 'meta'; messageId: string; conversation: ConversationRef }
   | { type: 'delta'; text: string }
   | { type: 'sources'; sources: ChatSource[] }
   /** Server rejected the streamed text (no grounding); show this instead. */
   | { type: 'replace'; text: string }
-  | { type: 'done' }
+  | { type: 'done'; outcome: ChatOutcome }
   | { type: 'error'; code: string; message: string };
+
+export type HistoryMessage = {
+  role: 'user' | 'assistant';
+  text: string;
+  sources: ChatSource[];
+  outcome: ChatOutcome | 'error' | null;
+};
 
 /** iframe to loader */
 export type FrameMessage =
