@@ -3,6 +3,8 @@ import { serviceClient } from '../db';
 
 export type Bot = {
   id: string;
+  /** null for the system-owned demo bot */
+  ownerId: string | null;
   publicKey: string;
   allowedOrigins: string[];
   fallback: string;
@@ -12,6 +14,7 @@ export type Bot = {
 
 type BotRow = {
   id: string;
+  owner_id: string | null;
   public_key: string;
   name: string;
   launcher_label: string;
@@ -23,11 +26,12 @@ type BotRow = {
   retention_days: number;
 };
 
-const COLUMNS = 'id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback, retention_days';
+const COLUMNS = 'id, owner_id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback, retention_days';
 
 function toBot(row: BotRow): Bot {
   return {
     id: row.id,
+    ownerId: row.owner_id,
     publicKey: row.public_key,
     allowedOrigins: row.allowed_origins,
     fallback: row.fallback,
