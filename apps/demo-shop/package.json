@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../../scripts/serve-static.mjs . 5174"
+    "dev": "node ../../scripts/serve-static.mjs . 5174",
+    "build": "node ../../scripts/build-demo-shop.mjs"
   }
 }

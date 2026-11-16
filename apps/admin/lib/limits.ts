@@ -10,8 +10,12 @@ const fromEnv = (name: string, fallback: number) => {
 /** Defaults sized for a public portfolio demo; raise them per deployment through the environment. */
 export const LIMITS = {
   chatPerIpHourly: fromEnv('LIMIT_CHAT_PER_IP_HOURLY', 30),
-  answersPerDay: fromEnv('LIMIT_ANSWERS_PER_DAY', 200),
+  /** One bot's share; it cannot use up the budget of other bots. */
+  answersPerBotDaily: fromEnv('LIMIT_ANSWERS_PER_BOT_DAILY', 200),
+  /** Cost backstop across all bots; keep it well above any single bot's share. */
+  answersPerDay: fromEnv('LIMIT_ANSWERS_PER_DAY', 1000),
   inquiriesPerIpHourly: fromEnv('LIMIT_INQUIRIES_PER_IP_HOURLY', 5),
+  inquiriesPerBotDaily: fromEnv('LIMIT_INQUIRIES_PER_BOT_DAILY', 50),
   demosPerIpDaily: fromEnv('LIMIT_DEMOS_PER_IP_DAILY', 5),
   demosPerDay: fromEnv('LIMIT_DEMOS_PER_DAY', 50),
 };
@@ -19,11 +23,19 @@ export const LIMITS = {
 const HOUR = 3600;
 const DAY = 86_400;
 
-// shortcut: trusts the proxy's forwarding headers. Behind Vercel they carry the real client address;
-// without a proxy in front, a caller can rotate them and skip the per-IP limit (the per-bot monthly and
-// daily caps do not depend on the IP, so spend stays bounded). Read the platform's client IP if self-hosting.
+/**
+ * The address the platform saw. The left-most X-Forwarded-For entry is whatever the caller sent, so it
+ * is never used: Vercel's own header first, then x-real-ip, then the entry the last proxy appended.
+ */
+// shortcut: assumes one trusted proxy (Vercel). Self-hosted without a proxy, callers can still rotate these
+// headers and skip per-IP limits; the per-bot caps do not depend on the IP, so spend stays bounded.
 export function clientIp(headers: Headers): string {
-  return headers.get('x-forwarded-for')?.split(',')[0]?.trim() || headers.get('x-real-ip') || 'unknown';
+  return (
+    headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ||
+    headers.get('x-real-ip')?.trim() ||
+    headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
+    'unknown'
+  );
 }
 
 /** Raw IPs are never stored: the key is a hash salted with the day, so it cannot be joined across days. */
@@ -54,15 +66,18 @@ export async function checkChatQuota(bot: { id: string; monthlyLimit: number }, 
   if (!(await consume(`bot-month:${bot.id}:${month}`, bot.monthlyLimit, 40 * DAY))) {
     return '이번 달 상담 가능 횟수를 모두 사용했어요. 문의를 남겨 주시면 담당자가 확인해 드릴게요.';
   }
-  if (!(await consume(`answers-day:${day}`, LIMITS.answersPerDay, 2 * DAY))) {
-    return '오늘 준비된 상담량이 모두 소진되었어요. 내일 다시 이용하시거나 문의를 남겨 주세요.';
-  }
+  const outOfToday = '오늘 준비된 상담량이 모두 소진되었어요. 내일 다시 이용하시거나 문의를 남겨 주세요.';
+  if (!(await consume(`answers-bot-day:${bot.id}:${day}`, LIMITS.answersPerBotDaily, 2 * DAY))) return outOfToday;
+  if (!(await consume(`answers-day:${day}`, LIMITS.answersPerDay, 2 * DAY))) return outOfToday;
   return null;
 }
 
-export async function checkInquiryQuota(headers: Headers): Promise<boolean> {
+export async function checkInquiryQuota(botId: string, headers: Headers): Promise<boolean> {
   const { hour, day } = windows();
-  return consume(`inquiry-ip:${ipKey(clientIp(headers), day)}:${hour}`, LIMITS.inquiriesPerIpHourly, 2 * HOUR);
+  return (
+    (await consume(`inquiry-ip:${ipKey(clientIp(headers), day)}:${hour}`, LIMITS.inquiriesPerIpHourly, 2 * HOUR)) &&
+    (await consume(`inquiry-bot-day:${botId}:${day}`, LIMITS.inquiriesPerBotDaily, 2 * DAY))
+  );
 }
 
 export async function checkDemoQuota(headers: Headers): Promise<boolean> {

@@ -10,7 +10,14 @@ const staticHost = (dir: string, port: number) => ({
 export default defineConfig({
   testDir: 'e2e',
   workers: 1, // tests share the local Supabase demo bot
-  use: { browserName: 'chromium' },
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' }, testIgnore: 'perf.spec.ts' },
+    { name: 'perf', use: { browserName: 'chromium' }, testMatch: 'perf.spec.ts' },
+    // The widget runs on customers' sites in every browser. The admin and perf specs stay on Chromium:
+    // each admin test signs in anonymously and Supabase allows 30 such sign-ins per hour per IP.
+    { name: 'firefox', use: { browserName: 'firefox' }, testMatch: 'embed.spec.ts' },
+    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: 'embed.spec.ts' },
+  ],
   webServer: [
     {
       command: `${pnpm} --filter @supportkit/widget build && ${pnpm} --filter @supportkit/admin build && ${pnpm} --filter @supportkit/admin start`,
@@ -27,7 +34,9 @@ export default defineConfig({
         RESEND_API_KEY: '',
         LIMIT_CHAT_PER_IP_HOURLY: '100000',
         LIMIT_ANSWERS_PER_DAY: '100000',
+        LIMIT_ANSWERS_PER_BOT_DAILY: '100000',
         LIMIT_INQUIRIES_PER_IP_HOURLY: '100000',
+        LIMIT_INQUIRIES_PER_BOT_DAILY: '100000',
         LIMIT_DEMOS_PER_IP_DAILY: '100000',
         LIMIT_DEMOS_PER_DAY: '100000',
       },

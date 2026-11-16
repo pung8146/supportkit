@@ -28,6 +28,7 @@ describe('recordInstallSeen', () => {
     'https://Shop.example.com',
     'http://shop.example.com',
     'https://xn--and-quotes".com',
+    'https://*.example.com',
   ])('ignores forged origin %j', async (origin) => {
     await recordInstallSeen('b1', origin, false);
     expect(update).not.toHaveBeenCalled();

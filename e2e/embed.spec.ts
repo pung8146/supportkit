@@ -71,13 +71,28 @@ test('bootstrap checks the Origin header on the server', async ({ request }) => 
 });
 
 test('browser refuses to frame the embed on a disallowed origin', async ({ page }) => {
-  await page.goto(BLOCKED);
-  await page.evaluate((src) => {
-    const frame = document.createElement('iframe');
-    frame.src = src;
-    document.documentElement.append(frame);
-  }, EMBED);
-  await expect.poll(() => page.frames().at(-1)?.url()).toContain('chrome-error');
+  // A widget document that loads always posts sk:ready to its parent; a blocked one never runs.
+  // This works in every engine, unlike inspecting each browser's own error page.
+  const readyMessages = async (url: string) => {
+    await page.goto(url);
+    return page.evaluate(
+      (src) =>
+        new Promise<number>((resolve) => {
+          let count = 0;
+          window.addEventListener('message', (event) => {
+            if ((event.data as { type?: string })?.type === 'sk:ready') count += 1;
+          });
+          const frame = document.createElement('iframe');
+          frame.src = src;
+          document.documentElement.append(frame);
+          setTimeout(() => resolve(count), 3000);
+        }),
+      EMBED,
+    );
+  };
+
+  expect(await readyMessages(HOSTILE)).toBe(1); // allowed origin: proves the check can see a load
+  expect(await readyMessages(BLOCKED)).toBe(0);
 });
 
 test('keeps the question and retries after a provider failure', async ({ page }) => {
