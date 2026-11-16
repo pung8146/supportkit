@@ -3,6 +3,33 @@ import type { WidgetConfig } from '@supportkit/widget/protocol';
 
 export type KnowledgeInput = { kind: 'faq' | 'text'; title: string; body: string };
 
+const WILDCARD = /^https:\/\/\*\.((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})$/;
+
+/**
+ * Turns what an operator types ("shop.example.com", "https://shop.example.com/") into an origin
+ * the allowlist can match, or null. HTTPS only, except localhost for testing.
+ */
+export function normalizeOrigin(input: string): string | null {
+  let value = input.trim().toLowerCase().replace(/\/+$/, '');
+  if (!value) return null;
+  if (!/^[a-z]+:\/\//.test(value)) value = `https://${value}`;
+  if (WILDCARD.test(value)) return value;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+  // The URL parser accepts '*' in hostnames; only the WILDCARD form above may contain one.
+  if (!/^[a-z0-9.-]+$/.test(url.hostname)) return null;
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return null;
+  if (!local && !url.hostname.includes('.')) return null;
+  return url.origin;
+}
+
 export function validateKnowledge(input: KnowledgeInput): string | null {
   const isFaq = input.kind === 'faq';
   if (input.kind !== 'faq' && input.kind !== 'text') return '항목 종류가 올바르지 않습니다.';

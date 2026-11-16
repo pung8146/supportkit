@@ -1,5 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { validateKnowledge, validateSettings } from './validate';
+import { normalizeOrigin, validateKnowledge, validateSettings } from './validate';
+import { originAllowed } from '../widget/origin';
+
+describe('normalizeOrigin', () => {
+  it.each([
+    ['shop.example.com', 'https://shop.example.com'],
+    ['https://Shop.Example.com/', 'https://shop.example.com'],
+    ['https://shop.example.com:8443', 'https://shop.example.com:8443'],
+    ['http://localhost:5174', 'http://localhost:5174'],
+    ['*.brand.co.kr', 'https://*.brand.co.kr'],
+    ['https://*.brand.co.kr', 'https://*.brand.co.kr'],
+  ])('normalizes %s', (input, expected) => {
+    expect(normalizeOrigin(input)).toBe(expected);
+  });
+
+  it.each([
+    '',
+    'http://shop.example.com',
+    'https://shop.example.com/path',
+    'https://shop.example.com?x=1',
+    'https://user:pw@shop.example.com',
+    'intranet',
+    'https://*.com',
+    'https://a.*.example.com',
+    'ftp://shop.example.com',
+    'javascript:alert(1)',
+  ])('rejects %j', (input) => {
+    expect(normalizeOrigin(input)).toBeNull();
+  });
+
+  it('produces values the widget allowlist matches', () => {
+    expect(originAllowed('https://shop.example.com', [normalizeOrigin('shop.example.com/')!])).toBe(true);
+    expect(originAllowed('https://a.brand.co.kr', [normalizeOrigin('*.brand.co.kr')!])).toBe(true);
+  });
+});
 
 const config = {
   botName: '소담공방 안내',

@@ -2,7 +2,7 @@
 
 import type { FrameMessage, LoaderMessage } from '@supportkit/widget/protocol';
 import { useEffect, useRef, useState } from 'react';
-import { createPreviewSession } from '../../../lib/admin/actions';
+import { createPreviewSession } from '../../../../lib/admin/actions';
 import { usePreview } from './preview-context';
 
 /** The real widget, framed here and driven the way loader.js drives it on a customer's site. */

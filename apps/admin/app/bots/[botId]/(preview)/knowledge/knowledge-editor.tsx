@@ -1,8 +1,8 @@
 'use client';
 
 import { useId, useState, useTransition } from 'react';
-import { deleteKnowledge, retryKnowledgeSync, saveKnowledge, type ActionResult } from '../../../../lib/admin/actions';
-import type { KnowledgeInput } from '../../../../lib/admin/validate';
+import { deleteKnowledge, retryKnowledgeSync, saveKnowledge, type ActionResult } from '../../../../../lib/admin/actions';
+import type { KnowledgeInput } from '../../../../../lib/admin/validate';
 
 export type KnowledgeItem = KnowledgeInput & { id: string; status: 'pending' | 'ready' | 'failed' };
 
@@ -180,8 +180,8 @@ function ItemRow({ botId, item }: { botId: string; item: KnowledgeItem }) {
   );
 }
 
-export function KnowledgeEditor({ botId, items }: { botId: string; items: KnowledgeItem[] }) {
-  const [adding, setAdding] = useState(false);
+export function KnowledgeEditor({ botId, items, draft }: { botId: string; items: KnowledgeItem[]; draft?: string }) {
+  const [adding, setAdding] = useState(Boolean(draft));
 
   return (
     <div className="mt-8">
@@ -195,7 +195,7 @@ export function KnowledgeEditor({ botId, items }: { botId: string; items: Knowle
       </div>
       {adding && (
         <ItemForm
-          initial={{ kind: 'faq', title: '', body: '' }}
+          initial={{ kind: 'faq', title: draft ?? '', body: '' }}
           allowKind
           onCancel={() => setAdding(false)}
           onSubmit={async (input) => {

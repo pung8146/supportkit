@@ -10,7 +10,7 @@ import { createUserClient } from '../supabase/server';
 import { signToken, tokenSecret } from '../widget/token';
 import { cloneDemoBot } from './demo';
 import { requireOwnedBot } from './session';
-import { validateKnowledge, validateSettings, type KnowledgeInput } from './validate';
+import { normalizeOrigin, validateKnowledge, validateSettings, type KnowledgeInput } from './validate';
 
 // Server actions are public endpoints: each one re-checks ownership through requireOwnedBot.
 
@@ -92,6 +92,85 @@ export async function retryKnowledgeSync(botId: string): Promise<ActionResult> {
     return { error: '아직 반영하지 못했습니다. 잠시 후 다시 시도해 주세요.' };
   }
   revalidatePath(`/bots/${bot.id}/knowledge`);
+  return { ok: true };
+}
+
+const MAX_ORIGINS = 10;
+
+export async function addAllowedOrigin(botId: string, input: string): Promise<ActionResult> {
+  const { supabase, bot } = await requireOwnedBot(botId);
+  if (bot.isDemo) return { error: '체험용 위젯은 외부 사이트에 설치할 수 없습니다.' };
+  const origin = normalizeOrigin(input);
+  if (!origin) return { error: 'https://shop.example.com 처럼 도메인만 입력해 주세요.' };
+
+  const { data, error } = await supabase.from('bots').select('allowed_origins').eq('id', bot.id).single<{ allowed_origins: string[] }>();
+  if (error) return { error: '도메인 목록을 불러오지 못했습니다.' };
+  if (data.allowed_origins.includes(origin)) return { error: '이미 추가된 도메인입니다.' };
+  if (data.allowed_origins.length >= MAX_ORIGINS) return { error: `도메인은 ${MAX_ORIGINS}개까지 추가할 수 있습니다.` };
+
+  // shortcut: read-modify-write; two operators adding at the same moment can drop one. Use an RPC if teams arrive.
+  const { error: updateError } = await supabase
+    .from('bots')
+    .update({ allowed_origins: [...data.allowed_origins, origin] })
+    .eq('id', bot.id);
+  if (updateError) {
+    console.error(updateError);
+    return { error: '도메인을 추가하지 못했습니다.' };
+  }
+  revalidatePath(`/bots/${bot.id}/install`);
+  return { ok: true };
+}
+
+export async function removeAllowedOrigin(botId: string, origin: string): Promise<ActionResult> {
+  const { supabase, bot } = await requireOwnedBot(botId);
+  const { data, error } = await supabase.from('bots').select('allowed_origins').eq('id', bot.id).single<{ allowed_origins: string[] }>();
+  if (error) return { error: '도메인 목록을 불러오지 못했습니다.' };
+  const { error: updateError } = await supabase
+    .from('bots')
+    .update({ allowed_origins: data.allowed_origins.filter((value) => value !== origin) })
+    .eq('id', bot.id);
+  if (updateError) return { error: '도메인을 삭제하지 못했습니다.' };
+  revalidatePath(`/bots/${bot.id}/install`);
+  return { ok: true };
+}
+
+export async function setRetention(botId: string, days: number): Promise<ActionResult> {
+  const { supabase, bot } = await requireOwnedBot(botId);
+  if (![30, 90, 180].includes(days)) return { error: '보관 기간은 30일, 90일, 180일 중에서 고를 수 있습니다.' };
+  const { error } = await supabase.from('bots').update({ retention_days: days }).eq('id', bot.id);
+  if (error) return { error: '보관 기간을 바꾸지 못했습니다.' };
+  revalidatePath(`/bots/${bot.id}/install`);
+  return { ok: true };
+}
+
+const INQUIRY_STATUSES = ['new', 'in_progress', 'resolved'] as const;
+export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
+
+export async function updateInquiry(botId: string, inquiryId: string, status: InquiryStatus, memo: string): Promise<ActionResult> {
+  const { supabase, bot } = await requireOwnedBot(botId);
+  if (!INQUIRY_STATUSES.includes(status)) return { error: '처리 상태가 올바르지 않습니다.' };
+  if (memo.length > 1000) return { error: '메모는 1,000자 이내로 입력해 주세요.' };
+  const { error } = await supabase
+    .from('inquiries')
+    .update({ status, memo: memo.trim() || null })
+    .eq('id', inquiryId)
+    .eq('bot_id', bot.id);
+  if (error) {
+    console.error(error);
+    return { error: '저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' };
+  }
+  revalidatePath(`/bots/${bot.id}/inbox`);
+  return { ok: true };
+}
+
+export async function deleteConversation(botId: string, conversationId: string): Promise<ActionResult> {
+  const { supabase, bot } = await requireOwnedBot(botId);
+  const { error } = await supabase.from('conversations').delete().eq('id', conversationId).eq('bot_id', bot.id);
+  if (error) {
+    console.error(error);
+    return { error: '대화를 삭제하지 못했습니다.' };
+  }
+  revalidatePath(`/bots/${bot.id}/inbox`);
   return { ok: true };
 }
 

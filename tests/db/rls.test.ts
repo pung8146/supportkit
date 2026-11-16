@@ -252,6 +252,47 @@ describe('retrieval functions', () => {
   });
 });
 
+describe('demo and install rules', () => {
+  it('an anonymous user cannot create a bot through the API', async () => {
+    const visitor = createClient(url, env.ANON_KEY!, options);
+    const { data, error } = await visitor.auth.signInAnonymously();
+    if (error) throw error;
+    try {
+      const insert = await visitor.from('bots').insert({ owner_id: data.user!.id, name: 'spam', allowed_origins: ['https://evil.test'] });
+      expect(insert.error).not.toBeNull();
+    } finally {
+      await service.auth.admin.deleteUser(data.user!.id);
+    }
+  });
+
+  it('a demo bot cannot get allowed origins from its owner or the server', async () => {
+    const { data: demo, error } = await service.from('bots').insert({ owner_id: a.id, name: 'demo', is_demo: true }).select('id').single();
+    if (error) throw error;
+    expect((await a.client.from('bots').update({ allowed_origins: ['https://evil.test'] }).eq('id', demo.id)).error).not.toBeNull();
+    expect((await service.from('bots').update({ allowed_origins: ['https://evil.test'] }).eq('id', demo.id)).error).not.toBeNull();
+  });
+
+  it('a regular owner can set allowed origins', async () => {
+    expect((await a.client.from('bots').update({ allowed_origins: ['https://shop.test'] }).eq('id', a.botId)).error).toBeNull();
+  });
+
+  it('resolving an inquiry starts a 90-day contact clock and reopening stops it', async () => {
+    await a.client.from('inquiries').update({ status: 'resolved' }).eq('id', inquiryId);
+    const { data: resolved } = await service.from('inquiries').select('expires_at').eq('id', inquiryId).single();
+    const days = (Date.parse(resolved!.expires_at) - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(89.9);
+    expect(days).toBeLessThan(90.1);
+
+    await a.client.from('inquiries').update({ status: 'in_progress' }).eq('id', inquiryId);
+    const { data: reopened } = await service.from('inquiries').select('expires_at').eq('id', inquiryId).single();
+    expect(reopened!.expires_at).toBeNull();
+  });
+
+  it('the owner cannot set the deletion date directly', async () => {
+    expect((await a.client.from('inquiries').update({ expires_at: '2100-01-01' }).eq('id', inquiryId)).error).not.toBeNull();
+  });
+});
+
 describe('cross-bot integrity', () => {
   it('rejects a message that mixes two bots', async () => {
     const { error } = await service

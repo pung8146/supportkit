@@ -3,7 +3,7 @@
 import { isHexColor, readableAccent } from '@supportkit/widget/color';
 import type { WidgetConfig } from '@supportkit/widget/protocol';
 import { useState, useTransition, type ReactNode } from 'react';
-import { saveSettings } from '../../../../lib/admin/actions';
+import { saveSettings } from '../../../../../lib/admin/actions';
 import { usePreview } from '../preview-context';
 
 const inputClass = 'rounded-md border border-line bg-surface px-3 py-2 text-[15px]';

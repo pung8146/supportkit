@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
+  { segment: 'inbox', label: '문의' },
   { segment: 'knowledge', label: '지식' },
   { segment: 'widget', label: '위젯' },
+  { segment: 'install', label: '설치' },
 ];
 
 export function Tabs({ botId }: { botId: string }) {

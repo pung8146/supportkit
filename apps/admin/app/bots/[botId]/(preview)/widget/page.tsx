@@ -1,4 +1,4 @@
-import { requireOwnedBot } from '../../../../lib/admin/session';
+import { requireOwnedBot } from '../../../../../lib/admin/session';
 import { WidgetSettings } from './widget-settings';
 
 export default async function WidgetPage({ params }: { params: Promise<{ botId: string }> }) {

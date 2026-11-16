@@ -7,7 +7,7 @@ export default async function Home() {
   if (await currentUserId()) {
     const supabase = await createUserClient();
     const { data } = await supabase.from('bots').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (data) redirect(`/bots/${data.id}/knowledge`);
+    if (data) redirect(`/bots/${data.id}/inbox`);
   }
 
   return (

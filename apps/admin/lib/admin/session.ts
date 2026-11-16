@@ -1,5 +1,6 @@
 import type { WidgetConfig } from '@supportkit/widget/protocol';
 import { notFound, redirect } from 'next/navigation';
+import { cache } from 'react';
 import { createUserClient } from '../supabase/server';
 
 export type OwnedBot = {
@@ -31,9 +32,9 @@ export async function currentUserId(): Promise<string | null> {
 
 /**
  * Loads a bot through RLS, so it only exists if the signed-in user owns it.
- * Every admin page and server action starts here.
+ * Every admin page and server action starts here. cache() shares one lookup per request.
  */
-export async function requireOwnedBot(botId: string) {
+export const requireOwnedBot = cache(async (botId: string) => {
   const supabase = await createUserClient();
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims?.sub) redirect('/');
@@ -60,4 +61,4 @@ export async function requireOwnedBot(botId: string) {
     },
   };
   return { supabase, bot };
-}
+});
