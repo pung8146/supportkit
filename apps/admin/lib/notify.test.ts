@@ -9,6 +9,7 @@ const bot: Bot = {
   allowedOrigins: [],
   fallback: '',
   retentionDays: 90,
+  monthlyLimit: 1000,
   config: { botName: '소담공방 안내', launcherLabel: '', welcome: '', starters: [], theme: { accent: '#000', position: 'right' } },
 };
 

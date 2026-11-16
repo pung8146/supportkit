@@ -3,6 +3,7 @@ import { MAX_MESSAGE_LENGTH, type ChatEvent, type ChatOutcome, type ChatSource }
 import { maskPII } from '../../../../lib/answer/mask-pii';
 import { answerEvents } from '../../../../lib/answer/pipeline';
 import { appendMessage, historyForModel, loadHistory, openConversation } from '../../../../lib/conversations';
+import { checkChatQuota } from '../../../../lib/limits';
 import { authorizeWidget } from '../../../../lib/widget/auth';
 import { fakeEvents } from '../../../../lib/widget/fake-llm';
 
@@ -58,6 +59,15 @@ export async function POST(request: Request) {
     return Response.json({ error: 'invalid_message' }, { status: 400 });
   }
   const ref = typeof body?.conversation === 'string' ? body.conversation : undefined;
+
+  let limited: string | null;
+  try {
+    limited = await checkChatQuota(bot, request.headers);
+  } catch (error) {
+    console.error(error);
+    return Response.json({ error: 'service_unavailable' }, { status: 503 });
+  }
+  if (limited) return Response.json({ error: 'rate_limited', message: limited }, { status: 429 });
 
   let conversation: { id: string; ref: string };
   let history: ReturnType<typeof historyForModel>;

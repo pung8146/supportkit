@@ -1,5 +1,6 @@
 -- Local demo bot. Ports match the demo shop and the allowed E2E host.
-insert into public.bots (id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins)
+-- monthly_limit is high locally because every E2E run chats with this bot; set it per deployment.
+insert into public.bots (id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, monthly_limit)
 values (
   '00000000-0000-4000-8000-000000000001',
   'pk_demo_shop',
@@ -8,7 +9,8 @@ values (
   '안녕하세요. 배송, 교환, 환불에 대해 안내해 드릴게요.',
   array['환불은 며칠 안에 되나요?', '배송비는 얼마인가요?'],
   '{"accent": "#1f4d3f", "position": "right"}',
-  array['http://localhost:5174', 'http://localhost:5175']
+  array['http://localhost:5174', 'http://localhost:5175'],
+  1000000
 );
 
 -- Same text as the demo shop's policy section, so visitors can check every answer.

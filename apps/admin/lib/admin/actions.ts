@@ -7,6 +7,8 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { syncPendingKnowledge } from '../knowledge/sync';
 import { createUserClient } from '../supabase/server';
+import { checkDemoQuota } from '../limits';
+import { notExpired } from '../widget/bots';
 import { signToken, tokenSecret } from '../widget/token';
 import { cloneDemoBot } from './demo';
 import { requireOwnedBot } from './session';
@@ -20,6 +22,22 @@ export async function startDemo(): Promise<ActionResult> {
   const supabase = await createUserClient();
   const { data: claims } = await supabase.auth.getClaims();
   let userId = claims?.claims?.sub;
+
+  // One demo per visitor: reopen the one they already have instead of cloning again.
+  if (userId) {
+    const { data: existing } = await supabase.from('bots').select('id').or(notExpired()).limit(1).maybeSingle();
+    if (existing) redirect(`/bots/${existing.id}/knowledge`);
+  }
+
+  try {
+    if (!(await checkDemoQuota(await headers()))) {
+      return { error: '오늘 준비된 체험 수를 모두 사용했습니다. 내일 다시 시도해 주세요.' };
+    }
+  } catch (error) {
+    console.error(error);
+    return { error: '체험을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.' };
+  }
+
   if (!userId) {
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.user) {
@@ -42,8 +60,10 @@ export async function startDemo(): Promise<ActionResult> {
 /** A short-lived widget session for the owner's preview; it skips the origin allowlist. */
 export async function createPreviewSession(botId: string): Promise<BootstrapResponse> {
   const { bot } = await requireOwnedBot(botId);
-  const origin = (await headers()).get('origin');
-  if (!origin) throw new Error('missing origin');
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get('origin');
+  // Bound to the admin app itself: the preview token skips the allowlist, so it must not be minted for another site.
+  if (!origin || new URL(origin).host !== requestHeaders.get('host')) throw new Error('preview must be requested from the admin app');
   return {
     token: signToken({ botId: bot.id, origin, sid: randomUUID(), preview: true }, tokenSecret()),
     origin,

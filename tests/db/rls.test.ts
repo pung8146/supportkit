@@ -293,6 +293,74 @@ describe('demo and install rules', () => {
   });
 });
 
+describe('quotas', () => {
+  const take = (key: string, limit: number) =>
+    service.rpc('consume_quota', { p_key: key, p_limit: limit, p_ttl_seconds: 60 }).then(({ data, error }) => {
+      if (error) throw error;
+      return data as boolean;
+    });
+
+  it('counts up to the limit and refuses after it', async () => {
+    const key = `test:${randomUUID()}`;
+    expect([await take(key, 2), await take(key, 2), await take(key, 2)]).toEqual([true, true, false]);
+  });
+
+  it('refuses everything at a zero limit', async () => {
+    expect(await take(`test:${randomUUID()}`, 0)).toBe(false);
+  });
+
+  it('allows exactly the limit under concurrent requests', async () => {
+    const key = `test:${randomUUID()}`;
+    const results = await Promise.all(Array.from({ length: 20 }, () => take(key, 5)));
+    expect(results.filter(Boolean)).toHaveLength(5);
+  });
+
+  it('cannot be called or read by signed-in users', async () => {
+    expect((await a.client.rpc('consume_quota', { p_key: 'x', p_limit: 1000, p_ttl_seconds: 60 })).error).not.toBeNull();
+    expect((await a.client.rpc('cleanup_expired')).error).not.toBeNull();
+    expect(rows(await a.client.from('rate_buckets').select('key'))).toEqual([]);
+  });
+});
+
+describe('cleanup', () => {
+  it('deletes only data past its retention', async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const future = new Date(Date.now() + 86_400_000).toISOString();
+    const conversation = (expires_at: string) =>
+      service.from('conversations').insert({ bot_id: a.botId, visitor_hash: 'v', origin: 'https://a.test', expires_at }).select('id').single();
+    const { data: oldConversation } = await conversation(past);
+    const { data: liveConversation } = await conversation(future);
+    await service.from('messages').insert({ conversation_id: oldConversation!.id, bot_id: a.botId, role: 'user', content: 'old' });
+
+    const inquiry = (expires_at: string | null) =>
+      service
+        .from('inquiries')
+        .insert({ bot_id: a.botId, question: 'q', contact: 'c', consent_version: 'v1', consented_at: past, status: 'resolved', expires_at })
+        .select('id')
+        .single();
+    const { data: oldInquiry } = await inquiry(past);
+    const { data: liveInquiry } = await inquiry(future);
+
+    const demo = (expires_at: string) => service.from('bots').insert({ owner_id: b.id, name: 'demo', is_demo: true, expires_at }).select('id').single();
+    const { data: oldDemo } = await demo(past);
+    const { data: liveDemo } = await demo(future);
+
+    const { data: report, error } = await service.rpc('cleanup_expired');
+    expect(error).toBeNull();
+    expect(report.conversations).toBeGreaterThanOrEqual(1);
+
+    const exists = async (table: string, id: string) => rows(await service.from(table).select('id').eq('id', id)).length === 1;
+    expect(await exists('conversations', oldConversation!.id)).toBe(false);
+    expect(rows(await service.from('messages').select('id').eq('conversation_id', oldConversation!.id))).toEqual([]);
+    expect(await exists('conversations', liveConversation!.id)).toBe(true);
+    expect(await exists('inquiries', oldInquiry!.id)).toBe(false);
+    expect(await exists('inquiries', liveInquiry!.id)).toBe(true);
+    expect(await exists('bots', oldDemo!.id)).toBe(false);
+    expect(await exists('bots', liveDemo!.id)).toBe(true);
+    expect(await exists('bots', a.botId)).toBe(true);
+  });
+});
+
 describe('cross-bot integrity', () => {
   it('rejects a message that mixes two bots', async () => {
     const { error } = await service

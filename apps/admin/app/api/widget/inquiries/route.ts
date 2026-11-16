@@ -2,6 +2,7 @@ import { INQUIRY_CONSENT_VERSION, validateInquiry } from '@supportkit/widget/inq
 import { maskPII } from '../../../../lib/answer/mask-pii';
 import { findConversation } from '../../../../lib/conversations';
 import { serviceClient } from '../../../../lib/db';
+import { checkInquiryQuota } from '../../../../lib/limits';
 import { notifyInquiry } from '../../../../lib/notify';
 import { authorizeWidget } from '../../../../lib/widget/auth';
 
@@ -23,6 +24,9 @@ export async function POST(request: Request) {
   const masked = maskPII(question.trim());
   let inquiryId: string;
   try {
+    if (!(await checkInquiryQuota(request.headers))) {
+      return Response.json({ error: 'rate_limited', message: '문의가 연달아 접수되었어요. 잠시 후 다시 시도해 주세요.' }, { status: 429 });
+    }
     const linked = typeof conversation === 'string' ? await findConversation(bot, conversation) : null;
     const { data, error } = await serviceClient()
       .from('inquiries')

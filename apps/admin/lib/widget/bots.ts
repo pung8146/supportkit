@@ -9,6 +9,7 @@ export type Bot = {
   allowedOrigins: string[];
   fallback: string;
   retentionDays: number;
+  monthlyLimit: number;
   config: WidgetConfig;
 };
 
@@ -24,9 +25,11 @@ type BotRow = {
   allowed_origins: string[];
   fallback: string;
   retention_days: number;
+  monthly_limit: number;
 };
 
-const COLUMNS = 'id, owner_id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback, retention_days';
+const COLUMNS =
+  'id, owner_id, public_key, name, launcher_label, welcome, starters, theme, allowed_origins, fallback, retention_days, monthly_limit';
 
 function toBot(row: BotRow): Bot {
   return {
@@ -36,6 +39,7 @@ function toBot(row: BotRow): Bot {
     allowedOrigins: row.allowed_origins,
     fallback: row.fallback,
     retentionDays: row.retention_days,
+    monthlyLimit: row.monthly_limit,
     config: {
       botName: row.name,
       launcherLabel: row.launcher_label,
@@ -46,8 +50,11 @@ function toBot(row: BotRow): Bot {
   };
 }
 
+/** PostgREST filter for bots that have not expired (demo bots expire; others have no expiry). */
+export const notExpired = () => `expires_at.is.null,expires_at.gt.${new Date().toISOString()}`;
+
 async function findBot(column: 'id' | 'public_key', value: string): Promise<Bot | null> {
-  const { data, error } = await serviceClient().from('bots').select(COLUMNS).eq(column, value).maybeSingle<BotRow>();
+  const { data, error } = await serviceClient().from('bots').select(COLUMNS).eq(column, value).or(notExpired()).maybeSingle<BotRow>();
   // Throw so an outage is never reported to the caller as "bot not found".
   if (error) throw new Error(`bot lookup failed: ${error.message}`);
   return data ? toBot(data) : null;

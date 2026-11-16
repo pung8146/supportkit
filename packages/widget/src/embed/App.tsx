@@ -3,13 +3,13 @@ import type { InquiryInput } from '../inquiry';
 import { MAX_MESSAGE_LENGTH, type ChatOutcome, type ChatSource, type HistoryMessage, type WidgetConfig } from '../protocol';
 import { InquiryForm } from './InquiryForm';
 import { clearConversation, saveConversation } from './storage';
-import { openChat, submitInquiry, type TokenSource } from './stream';
+import { LimitError, openChat, submitInquiry, type TokenSource } from './stream';
 
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   text: string;
-  status: 'waiting' | 'streaming' | 'done' | 'stopped' | 'error';
+  status: 'waiting' | 'streaming' | 'done' | 'stopped' | 'error' | 'limited';
   question?: string;
   sources?: ChatSource[];
   outcome?: ChatOutcome;
@@ -97,8 +97,13 @@ export function App({ config, auth, initialMessages, initialConversation, onClos
         cancelAnimationFrame(frame);
         patch(id, { text, status: 'done' });
         setAnnouncement(text);
-      } catch {
+      } catch (error) {
         cancelAnimationFrame(frame);
+        if (error instanceof LimitError) {
+          patch(id, { text: error.message, status: 'limited' });
+          setAnnouncement(error.message);
+          return;
+        }
         const stopped = controller.signal.aborted;
         patch(id, { text, status: stopped ? 'stopped' : 'error' });
         if (!stopped) setAnnouncement('답변을 가져오지 못했습니다. 다시 시도할 수 있습니다.');
@@ -207,7 +212,7 @@ export function App({ config, auth, initialMessages, initialConversation, onClos
               {message.status === 'done' && message.sources && message.sources.length > 0 && (
                 <p className="sources">근거 · {message.sources.map((source) => source.title).join(', ')}</p>
               )}
-              {message.status === 'done' && message.outcome && message.outcome !== 'answered' && (
+              {(message.status === 'limited' || (message.status === 'done' && message.outcome && message.outcome !== 'answered')) && (
                 <>
                   {message.inquiry === 'sent' && <p className="status">문의가 접수되었어요. 담당자가 확인 후 연락드릴게요.</p>}
                   {message.inquiry === 'open' && (

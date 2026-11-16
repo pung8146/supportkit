@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation';
 import { currentUserId } from '../lib/admin/session';
 import { createUserClient } from '../lib/supabase/server';
+import { notExpired } from '../lib/widget/bots';
 import { DemoButton } from './demo-button';
 
 export default async function Home() {
   if (await currentUserId()) {
     const supabase = await createUserClient();
-    const { data } = await supabase.from('bots').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data } = await supabase.from('bots').select('id').or(notExpired()).order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (data) redirect(`/bots/${data.id}/inbox`);
   }
 

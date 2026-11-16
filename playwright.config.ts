@@ -19,7 +19,18 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       // Supabase settings come from apps/admin/.env.local; allowed origins from supabase/seed.sql.
       // An empty key overrides .env.local so E2E never sends real email.
-      env: { WIDGET_TOKEN_SECRET: 'e2e-only-secret-e2e-only-secret-0000', LLM_MODE: 'fake', RESEND_API_KEY: '' },
+      // Per-IP and daily limits are raised because every test shares localhost; the per-bot monthly
+      // limit stays real and is exercised by its own test.
+      env: {
+        WIDGET_TOKEN_SECRET: 'e2e-only-secret-e2e-only-secret-0000',
+        LLM_MODE: 'fake',
+        RESEND_API_KEY: '',
+        LIMIT_CHAT_PER_IP_HOURLY: '100000',
+        LIMIT_ANSWERS_PER_DAY: '100000',
+        LIMIT_INQUIRIES_PER_IP_HOURLY: '100000',
+        LIMIT_DEMOS_PER_IP_DAILY: '100000',
+        LIMIT_DEMOS_PER_DAY: '100000',
+      },
     },
     staticHost('apps/demo-shop', 5174),
     staticHost('e2e/hosts', 5175), // allowed

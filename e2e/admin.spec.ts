@@ -163,6 +163,36 @@ test('install detection records where the widget loaded and where it was refused
   expect(data).toEqual({ last_seen_origin: 'http://localhost:5174', last_blocked_origin: 'http://localhost:5176' });
 });
 
+async function serviceDb() {
+  const { createClient } = await import('@supabase/supabase-js');
+  process.loadEnvFile('apps/admin/.env.local');
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+const botIdOf = (url: string) => /\/bots\/([0-9a-f-]{36})\//.exec(url)![1]!;
+
+test('a bot over its monthly limit tells the visitor and offers an inquiry', async ({ page }) => {
+  const url = await startDemo(page);
+  await (await serviceDb()).from('bots').update({ monthly_limit: 1 }).eq('id', botIdOf(url));
+
+  const widget = preview(page);
+  await widget.getByRole('button', { name: '환불은 며칠 안에 되나요?' }).click();
+  await expect(widget.locator('.reply').last()).toHaveAttribute('data-status', 'done');
+
+  await widget.getByRole('textbox', { name: '질문 입력' }).fill('배송은 얼마나 걸리나요?');
+  await widget.getByRole('button', { name: '보내기' }).click();
+  await expect(widget.locator('.reply .answer').last()).toContainText('이번 달 상담 가능 횟수를 모두 사용했어요.');
+  await expect(widget.getByRole('button', { name: '다시 시도' })).toHaveCount(0);
+  await expect(widget.getByRole('button', { name: '담당자에게 문의 남기기' })).toBeVisible();
+});
+
+test('an expired demo can no longer be opened', async ({ page }) => {
+  const url = await startDemo(page);
+  await (await serviceDb()).from('bots').update({ expires_at: new Date(Date.now() - 1000).toISOString() }).eq('id', botIdOf(url));
+  const response = await page.goto(url);
+  expect(response?.status()).toBe(404);
+});
+
 test("another visitor cannot open someone else's bot", async ({ page, browser }) => {
   const url = await startDemo(page);
 

@@ -2,6 +2,7 @@ import type { WidgetConfig } from '@supportkit/widget/protocol';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { createUserClient } from '../supabase/server';
+import { notExpired } from '../widget/bots';
 
 export type OwnedBot = {
   id: string;
@@ -44,6 +45,7 @@ export const requireOwnedBot = cache(async (botId: string) => {
     .from('bots')
     .select('id, public_key, is_demo, name, launcher_label, welcome, starters, theme')
     .eq('id', botId)
+    .or(notExpired())
     .maybeSingle<Row>();
   if (error) throw new Error(`bot lookup failed: ${error.message}`);
   if (!data) notFound();

@@ -89,9 +89,9 @@ export function OriginList({ botId, origins, blocked }: { botId: string; origins
       <p className="mt-2 text-sm text-muted">하위 도메인을 모두 허용하려면 *.example.com 처럼 입력합니다. 테스트용 localhost도 넣을 수 있습니다.</p>
       {blocked && (
         <p className="mt-3 text-[15px]">
-          최근 {blocked}에서 막힌 요청이 있었습니다.{' '}
+          최근 {blocked}에서 막힌 요청이 있었습니다. 누구나 보낼 수 있는 확인되지 않은 요청이니, 내 사이트가 맞을 때만 허용하세요.{' '}
           <button type="button" disabled={pending} onClick={() => run(() => addAllowedOrigin(botId, blocked))} className="font-semibold text-action underline underline-offset-4">
-            이 도메인 허용
+            내 사이트가 맞음, 허용
           </button>
         </p>
       )}

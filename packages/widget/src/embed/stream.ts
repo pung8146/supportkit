@@ -42,8 +42,15 @@ async function post(path: string, body: unknown, auth: TokenSource, signal?: Abo
   return response;
 }
 
+/** The server refused the question for quota reasons; `message` is written for the visitor. */
+export class LimitError extends Error {}
+
 export async function openChat(message: string, conversation: string | undefined, auth: TokenSource, signal: AbortSignal) {
   const response = await post('/api/widget/chat', { message, conversation }, auth, signal);
+  if (response.status === 429) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new LimitError(body?.message ?? '지금은 질문을 더 받을 수 없어요. 잠시 후 다시 시도해 주세요.');
+  }
   if (!response.ok || !response.body) throw new Error(`chat failed: ${response.status}`);
   return parseSSE(response.body);
 }
